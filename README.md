@@ -2,10 +2,10 @@
 
 | Archivo | Qué hace |
 |---|---|
-| `src/cliente.c` | Abre el WAV, revisa la firma RIFF/WAVE y envía el tamaño y el audio por bloques. |
-| `src/cifrado.c` | Aplica XOR con la clave que recibe. La misma función sirve para descifrar. |
-| `include/cifrado.h` | Declara la función de cifrado para que la puedan usar otros módulos. |
-| `Pruebas/receptor_prueba.py` | Recibe un archivo en la misma máquina y guarda el WAV recuperado. |
+| `src/client/cliente.c` | Abre el WAV, revisa la firma RIFF/WAVE y envía el tamaño y el audio por bloques. |
+| `src/client/cifrado.c` | Aplica XOR con la clave que recibe. La misma función sirve para descifrar. |
+| `include/client/cifrado.h` | Declara la función de cifrado para que la puedan usar otros módulos. |
+| `Test/receptor_prueba.py` | Recibe un archivo en la misma máquina y guarda el WAV recuperado. |
 
 ## Probar en Linux
 
@@ -15,7 +15,7 @@ En la primera terminal:
 
 ```bash
 export AUDIO_XOR_KEY='clave-demo'
-python3 Pruebas/receptor_prueba.py 5000 recuperado.wav
+python3 Test/receptor_prueba.py 5000 recuperado.wav
 ```
 
 En la segunda terminal, desde la misma carpeta:
@@ -31,4 +31,35 @@ Cuando el receptor muestre «WAV recuperado», compará los archivos:
 cmp audio.wav recuperado.wav && echo "Archivos idénticos"
 ```
 
+# Analisis de audio para la matriz de 8 x 8
 
+El modulo recibe entre 1 y 2048 muestras PCM mono de 16 bits y su frecuencia
+de muestreo. Aplica Hann y una FFT de 2048 puntos. Agrupa la energia por
+frecuencia y entrega ocho alturas de 0 a 8.
+
+| Columna | Rango o dato |
+|---|---|
+| 1 | 20 a 100 Hz |
+| 2 | 100 a 250 Hz |
+| 3 | 250 a 500 Hz |
+| 4 | 500 a 1000 Hz |
+| 5 | 1000 a 2000 Hz |
+| 6 | 2000 a 6000 Hz |
+| 7 | 6000 a 20000 Hz |
+| 8 | Volumen general (RMS) |
+
+Cada rango empieza en su limite inferior y llega hasta el comienzo de la
+siguiente banda. Se usa una escala fija de -48 a 0 dBFS y se redondea al
+nivel mas cercano. Las alturas se pueden comparar de una ventana a otra.
+
+## Prueba local
+
+Desde esta carpeta:
+
+```bash
+make probar-fft
+```
+
+La prueba genera silencio y un tono por banda. Para 440 Hz debe destacar
+la tercera columna entre las siete bandas. La octava tambien puede
+encenderse porque representa el volumen total.
