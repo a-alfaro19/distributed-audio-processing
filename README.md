@@ -5,7 +5,7 @@
 | `src/client/cliente.c` | Abre el WAV, revisa la firma RIFF/WAVE y envía el tamaño y el audio por bloques. |
 | `src/client/cifrado.c` | Aplica XOR con la clave que recibe. La misma función sirve para descifrar. |
 | `include/client/cifrado.h` | Declara la función de cifrado para que la puedan usar otros módulos. |
-| `Test/receptor_prueba.py` | Recibe un archivo en la misma máquina y guarda el WAV recuperado. |
+| `pruebas/receptor_prueba.py` | Recibe un archivo en la misma máquina y guarda el WAV recuperado. |
 
 ## Probar en Linux
 
@@ -15,7 +15,7 @@ En la primera terminal:
 
 ```bash
 export AUDIO_XOR_KEY='clave-demo'
-python3 Test/receptor_prueba.py 5000 recuperado.wav
+python3 pruebas/receptor_prueba.py 5000 recuperado.wav
 ```
 
 En la segunda terminal, desde la misma carpeta:
@@ -69,7 +69,7 @@ encenderse porque representa el volumen total.
 Desde esta carpeta, inicia el receptor en una terminal:
 
 ```bash
-AUDIO_XOR_KEY=clave-demo python3 Pruebas/receptor_prueba.py 5000 recuperado.wav
+AUDIO_XOR_KEY=clave-demo python3 pruebas/receptor_prueba.py 5000 recuperado.wav
 ```
 
 Cuando el receptor este escuchando, envia el WAV desde otra terminal:
