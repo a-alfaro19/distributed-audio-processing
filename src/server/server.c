@@ -5,39 +5,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <unistd.h>
-#include "socket_server.h"
-
-#define PORT 8080
-
-void run_master_node(int size)
-{
-    int server_fd, client_fd;
-
-    // 1. Initialize the TCP server
-    server_fd = init_tcp_server(PORT);
-    if (server_fd < 0)
-    {
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-
-    // 2. Accept incoming connection from client
-    client_fd = accept_client_connection(server_fd);
-    if (client_fd < 0)
-    {
-        close(server_fd);
-        MPI_Abort(MPI_COMM_WORLD, 1);
-    }
-
-    // 3. Read audio stream from client
-    // TODO: Implement this part.
-
-    // 4. Distribute work among the workers
-    // TODO: Implement this part.
-
-    // 5. Clean up connection descriptors
-    close(client_fd);
-    close(server_fd);
-}
+#include "master.h"
 
 int main(int argc, char **argv)
 {

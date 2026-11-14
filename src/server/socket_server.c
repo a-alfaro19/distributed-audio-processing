@@ -70,3 +70,30 @@ int accept_client_connection(int server_fd)
     printf("[SocketServer] Client successfully connected!\n");
     return new_socket;
 }
+
+int receive_exact_bytes(int client_fd, char *buffer, size_t total_bytes)
+{
+    size_t bytes_received = 0;
+    ssize_t result;
+
+    while (bytes_received < total_bytes)
+    {
+        result = recv(client_fd, buffer + bytes_received, total_bytes - bytes_received, 0);
+
+        if (result < 0)
+        {
+            perror("[SocketError] Error reading from client socket");
+            return -1;
+        }
+        else if (result == 0)
+        {
+            fprintf(stderr, "[SocketError] Client disconnected prematurely before sending all data.\n");
+            return -1;
+        }
+
+        bytes_received += result;
+    }
+
+    printf("[SocketServer] Successfully received %zu bytes of audio.\n", bytes_received);
+    return 0;
+}

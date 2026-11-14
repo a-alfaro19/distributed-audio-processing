@@ -2,18 +2,57 @@
 # Root Makefile for Distributed Audio Processing
 # ==========================================
 
+# Compiler
+CC = gcc
+AR = ar
+
+# Flags
+ARFLAGS = rcs
+CFLAGS = -Wall -Wextra -std=gnu99 -Iinclude
+
 # Directories
 BIN_DIR = bin
 BUILD_DIR = build
 SERVER_DIR = src/server
 
-.PHONY: all clean server server-run
+# Library paths
+COMMON_LIB = $(BUILD_DIR)/lib/libcommon.a
+CRYPTO_LIB = $(BUILD_DIR)/lib/libcrypto.a
+
+# Common module
+COMMON_SRCS = $(wildcard src/common/*.c)
+COMMON_OBJS = $(patsubst src/common/%.c, $(BUILD_DIR)/lib/common/%.o, $(COMMON_SRCS))
+
+# Crypto module
+CRYPTO_SRCS = $(wildcard src/crypto/*.c)
+CRYPTO_OBJS = $(patsubst src/crypto/%.c, $(BUILD_DIR)/lib/crypto/%.o, $(CRYPTO_SRCS))
+
+.PHONY: all libs clean server server-run
 
 # Default target: compile everything essential
-all: server
+all: libs server
+
+# Build reusable libraries
+libs: $(COMMON_LIB) $(CRYPTO_LIB)
+
+$(COMMON_LIB): $(COMMON_OBJS)
+	@mkdir -p $(dir $@)
+	$(AR) $(ARFLAGS) $@ $^
+
+$(CRYPTO_LIB): $(CRYPTO_OBJS)
+	@mkdir -p $(dir $@)
+	$(AR) $(ARFLAGS) $@ $^
+
+$(BUILD_DIR)/lib/common/%.o: src/common/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD_DIR)/lib/crypto/%.o: src/crypto/%.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
 
 # Build the server binary
-server:
+server: libs
 		@mkdir -p $(BIN_DIR)
 		@mkdir -p $(BUILD_DIR)/server
 		$(MAKE) -C $(SERVER_DIR)

@@ -21,4 +21,14 @@ int init_tcp_server(int port);
  */
 int accept_client_connection(int server_fd);
 
+/**
+ * @brief Receives a fixed amount of bytes from the client socket into a buffer.
+ *
+ * @param client_fd The connected client socket file descriptor.
+ * @param buffer Pointer to the destination memory buffer.
+ * @param total_bytes Number of bytes expected to be read.
+ * @return int 0 on success, or -1 on failure/disconnection.
+ */
+int receive_exact_bytes(int client_fd, char *buffer, size_t total_bytes);
+
 #endif // SOCKET_SERVER_H
