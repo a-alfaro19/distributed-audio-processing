@@ -63,3 +63,25 @@ make probar-fft
 La prueba genera silencio y un tono por banda. Para 440 Hz debe destacar
 la tercera columna entre las siete bandas. La octava tambien puede
 encenderse porque representa el volumen total.
+
+## Probar el WAV recuperado
+
+Desde esta carpeta, inicia el receptor en una terminal:
+
+```bash
+AUDIO_XOR_KEY=clave-demo python3 Pruebas/receptor_prueba.py 5000 recuperado.wav
+```
+
+Cuando el receptor este escuchando, envia el WAV desde otra terminal:
+
+```bash
+make cliente prueba_wav
+AUDIO_XOR_KEY=clave-demo ./cliente 127.0.0.1 5000 cancion_prueba.wav
+```
+
+Cuando aparezca el mensaje de WAV recuperado, compara los archivos y corre
+el analisis:
+
+```bash
+cmp cancion_prueba.wav recuperado.wav && ./prueba_wav recuperado.wav
+```
