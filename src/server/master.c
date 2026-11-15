@@ -98,11 +98,68 @@ static int read_audio_stream(int client_fd, const uint8_t *key, size_t key_len,
     return 0;
 }
 
+/**
+ * @brief Calculates chunk sizes, buffer displacements, and global XOR offsets for workers.
+ *
+ * @param total_size Total size of the audio payload in bytes.
+ * @param num_workers Number of worker processes.
+ * @param out_sendcounts Pointer to store the allocated array of chunk sizes.
+ * @param out_displs Pointer to store the allocated array of buffer displacements.
+ * @param out_offsets Pointer to store the allocated array of global XOR offsets.
+ * @return int 0 on success, or -1 on failure.
+ */
+static int calculate_fragment_metadata(uint64_t total_size, int num_workers,
+                                       int **out_sendcounts, int **out_displs, uint64_t **out_offsets)
+{
+    if (num_workers <= 0 || total_size == 0)
+    {
+        return -1;
+    }
+
+    int *sendcounts = (int *)malloc(num_workers * sizeof(int));
+    int *displs = (int *)malloc(num_workers * sizeof(int));
+    uint64_t *offsets = (uint64_t *)malloc(num_workers * sizeof(uint64_t));
+
+    if (!sendcounts || !displs || !offsets)
+    {
+        free(sendcounts);
+        free(displs);
+        free(offsets);
+        return -1;
+    }
+
+    uint64_t base_chunk = total_size / num_workers;
+    uint64_t remainder = total_size % num_workers;
+    uint64_t current_offset = HEADER_SIZE; // Empieza en 8 (después de la cabecera de tamaño)
+
+    for (int i = 0; i < num_workers; i++)
+    {
+        // El último worker absorbe cualquier byte sobrante de la división entera
+        sendcounts[i] = (int)(base_chunk + (i == num_workers - 1 ? remainder : 0));
+
+        // Desplazamiento relativo respecto al inicio del búfer de audio (en memoria del master)
+        displs[i] = (int)(current_offset - HEADER_SIZE);
+
+        // Offset global real en el flujo del archivo para mantener sincronizada la clave XOR
+        offsets[i] = current_offset;
+
+        current_offset += sendcounts[i];
+    }
+
+    *out_sendcounts = sendcounts;
+    *out_displs = displs;
+    *out_offsets = offsets;
+    return 0;
+}
+
 void run_master_node(int size)
 {
     int server_fd, client_fd;
     uint8_t *audio_buffer = NULL;
     uint64_t audio_file_size = 0;
+    int *sendcounts = NULL;
+    int *displs = NULL;
+    uint64_t *offsets = NULL;
 
     // 1. Retrieve XOR key
     const char *xor_key = getenv("AUDIO_XOR_KEY");
@@ -136,10 +193,20 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 5. Distribute work among the workers
+    // 5. Fragment audio stream in chunk
+    if (calculate_fragment_metadata(audio_file_size, size, &sendcounts, &displs, &offsets) < 0)
+    {
+        fprintf(stderr, "[Master Error] Failed to calculate fragment metadata.\n");
+        free(audio_buffer);
+        close(client_fd);
+        close(server_fd);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    // 6. Distribute work among the workers
     // TODO: Implement MPI_Scatter / distribution logic here.
 
-    // 6. Clean up resources
+    // 7. Clean up resources
     free(audio_buffer);
     close(client_fd);
     close(server_fd);
