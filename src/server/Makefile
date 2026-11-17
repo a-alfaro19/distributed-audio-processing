@@ -8,6 +8,9 @@ CC = mpicc
 # Compilation flags
 CFLAGS = -Wall -Wextra -std=gnu99 -I../../include -I../../include/server
 
+# Linker flags
+LDFLAGS = -lfftw3 -lm
+
 # Binary output target (placed in the root bin directory)
 TARGET = ../../bin/server
 
@@ -24,7 +27,7 @@ OBJS = $(patsubst %.c, $(BUILD_ROOT)/%.o, $(SRCS))
 all: $(TARGET)
 
 $(TARGET): $(OBJS) $(CRYPTO_LIB) $(COMMON_LIB)
-	$(CC) $(CFLAGS) $(OBJS) $(CRYPTO_LIB) $(COMMON_LIB) -o $(TARGET)
+	$(CC) $(CFLAGS) $(OBJS) $(CRYPTO_LIB) $(COMMON_LIB) -o $(TARGET) $(LDFLAGS)
 
 $(BUILD_ROOT)/%.o: %.c
 	@mkdir -p $(dir $@)
@@ -36,4 +39,4 @@ run: $(TARGET)
 
 # Clean rule: remove compiled binaries
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(BUILD_ROOT) $(TARGET)

@@ -3,6 +3,7 @@
 #include <mpi.h>
 #include <inttypes.h>
 #include "crypto/cifrado.h"
+#include "fft_processor.h"
 
 /**
  * @brief Receives the XOR encryption key and its length from the Master node.
@@ -102,7 +103,20 @@ void run_worker_node(int rank)
     if (decrypt_buffer(my_chunk, my_chunk_size, (const uint8_t *)xor_key, key_length, my_global_offset) < 0)
     {
         fprintf(stderr, "[Worker %d Error] Failed to decrypt audio chunk.\n", rank);
+        free(my_chunk);
+        free(xor_key);
+        MPI_Abort(MPI_COMM_WORLD, 1);
     }
+
+    // 4. Apply FFT to the audio chunks
+    if (process_audio_fft(my_chunk, my_chunk_size) < 0)
+    {
+        fprintf(stderr, "[Worker %d Error] FFT processing failed.\n", rank);
+        free(my_chunk);
+        free(xor_key);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    printf("[Worker %d] ¡Procesamiento FFT completado en el fragmento local!\n", rank);
 
     // 4. Clean resources
     free(my_chunk);
