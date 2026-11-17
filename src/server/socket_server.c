@@ -94,6 +94,6 @@ int receive_exact_bytes(int client_fd, char *buffer, size_t total_bytes)
         bytes_received += result;
     }
 
-    printf("[SocketServer] Successfully received %zu bytes of audio.\n", bytes_received);
+    printf("[SocketServer] Successfully received %zu bytes.\n", bytes_received);
     return 0;
 }

@@ -1,3 +1,9 @@
+# VS Code files
 .vscode/
+
+# Output files
 bin/
 build/
+
+# Secret files
+.env

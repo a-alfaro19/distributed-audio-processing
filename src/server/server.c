@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "master.h"
+#include "worker.h"
 
 int main(int argc, char **argv)
 {
@@ -44,7 +45,7 @@ int main(int argc, char **argv)
     else
     {
         // Worker node execution flow
-        printf("This is a worker node (rank %d) waiting for a workload running on %s.\n", rank, hostname);
+        run_worker_node(rank);
     }
 
     // 7. Terminate MPI execution environment
