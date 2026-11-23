@@ -14,6 +14,7 @@
 #include "socket_server.h"
 #include "audio_config.h"
 #include "audio_processor.h"
+#include "audio_classifier.h"
 #include <common/byte_utils.h>
 #include <crypto/cifrado.h>
 
@@ -371,15 +372,18 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    for (int r = 0; r < size; r++)
+    // 11. Clasify audio and calculate stats
+    GlobalAudioStats global_stats;
+    if (consolidate_audio_stats(all_results, size, &audio_cfg, &global_stats) == 0)
     {
-        printf("[Master] Rank %d | Frames: %zu | BPM: %.1f | RMS: %.4f | Centroid: %.1f Hz | L/H: %.2f\n",
-               r,
-               all_results[r].frames_processed,
-               all_results[r].bpm,
-               all_results[r].overall_rms,
-               all_results[r].spectral_centroid_hz,
-               all_results[r].low_to_high_ratio);
+        printf("[Master Summary] Class: %s | BPM: %.1f | RMS: %.4f | Centroid: %.1f Hz | "
+               "Refresh: %.1f ms | Decay: %.2f\n",
+               global_stats.label,
+               global_stats.global_bpm,
+               global_stats.weighted_overall_rms,
+               global_stats.weighted_spectral_centroid_hz,
+               global_stats.refresh_interval_ms,
+               global_stats.decay_per_step);
     }
 
     // 10. Clean up resources
