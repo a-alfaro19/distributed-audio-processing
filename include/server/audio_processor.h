@@ -1,3 +1,7 @@
+// ==============================================
+// FFTW3 Audio Spectral & Tempo Processor Header
+// ==============================================
+
 #ifndef AUDIO_PROCESSOR_H
 #define AUDIO_PROCESSOR_H
 

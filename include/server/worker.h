@@ -1,3 +1,7 @@
+// ==========================================
+// Worker Node Control Logic Header
+// ==========================================
+
 #ifndef WORKER_H
 #define WORKER_H
 

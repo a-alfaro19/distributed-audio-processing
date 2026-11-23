@@ -208,6 +208,50 @@ static int distribute_audio_work(const uint8_t *audio_buffer, const char *xor_ke
     return 0;
 }
 
+/**
+ * @brief Collects AudioFrameResult structures from all ranks in MPI_COMM_WORLD
+ *        into a sequentially ordered array on the master process (rank 0).
+ *
+ * @param local_result Pointer to the master rank's own computed AudioFrameResult.
+ * @param cluster_size Total number of MPI processes in MPI_COMM_WORLD.
+ * @param out_results Output pointer receiving a heap-allocated array of length
+ *                    world_size ordered by rank [0 .. world_size - 1].
+ * @return int MPI_SUCCESS on success, or an MPI error code on failure.
+ */
+int gather_audio_results(const AudioFrameResult *local_result,
+                         int cluster_size,
+                         AudioFrameResult **out_results)
+{
+    int rank = 0;
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    // 1. Validate arguments and ensure this function is only invoked on rank 0.
+    if (rank != 0 || !local_result || cluster_size <= 0 || !out_results)
+    {
+        return MPI_ERR_ARG;
+    }
+
+    // 2. Allocate contiguous array to store one AudioFrameResult per rank.
+    AudioFrameResult *gathered = (AudioFrameResult *)calloc((size_t)cluster_size, sizeof(AudioFrameResult));
+    if (!gathered)
+    {
+        return MPI_ERR_NO_MEM;
+    }
+
+    // 3. Gather raw struct bytes from all ranks into rank 0 in sequential rank order.
+    int err = MPI_Gather(local_result, (int)sizeof(*local_result), MPI_BYTE,
+                         gathered, (int)sizeof(*local_result), MPI_BYTE,
+                         0, MPI_COMM_WORLD);
+    if (err != MPI_SUCCESS)
+    {
+        free(gathered);
+        return err;
+    }
+
+    *out_results = gathered;
+    return MPI_SUCCESS;
+}
+
 void run_master_node(int size)
 {
     // 1. Load audio processor configuration and broadcast to workers
@@ -299,20 +343,47 @@ void run_master_node(int size)
     }
 
     // 9 Run FFT, 5-band LED mapping, and BPM estimation
-    AudioFrameResult results = {0};
-    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, &audio_cfg, &results) < 0)
+    AudioFrameResult local_results = {0};
+    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, &audio_cfg, &local_results) < 0)
     {
         fprintf(stderr, "[Master Error] Audio processing failed.\n");
         free(my_chunk);
         free(xor_key);
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    printf("[Master] Frames: %zu | BPM: %.1f | LEDs: [%d, %d, %d, %d, %d]\n",
-           results.frames_processed, results.bpm,
-           results.led_heights[0], results.led_heights[1], results.led_heights[2],
-           results.led_heights[3], results.led_heights[4]);
+
+    // 10. Gather results from workers
+    AudioFrameResult *all_results = (AudioFrameResult *)calloc((size_t)size, sizeof(AudioFrameResult));
+    if (!all_results)
+    {
+        fprintf(stderr, "[Master Error] Failed to allocate gathered results array.\n");
+        free(my_chunk);
+        free(xor_key);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    if (gather_audio_results(&local_results, size, &all_results) != MPI_SUCCESS)
+    {
+        fprintf(stderr, "[Master Error] MPI_Gather failed while collecting results.\n");
+        free(all_results);
+        free(my_chunk);
+        free(xor_key);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    for (int r = 0; r < size; r++)
+    {
+        printf("[Master] Rank %d | Frames: %zu | BPM: %.1f | RMS: %.4f | Centroid: %.1f Hz | L/H: %.2f\n",
+               r,
+               all_results[r].frames_processed,
+               all_results[r].bpm,
+               all_results[r].overall_rms,
+               all_results[r].spectral_centroid_hz,
+               all_results[r].low_to_high_ratio);
+    }
 
     // 10. Clean up resources
+    free(all_results);
     free(my_chunk);
     free(sendcounts);
     free(displs);

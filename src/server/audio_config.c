@@ -1,3 +1,7 @@
+// ======================================================
+// Audio Configuration Loader & Validator Implementation
+// ======================================================
+
 #include <ctype.h>
 #include <errno.h>
 #include <stdio.h>

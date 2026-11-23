@@ -1,3 +1,7 @@
+// ==========================================
+// Worker Node Control Logic Implementation
+// ==========================================
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <mpi.h>
@@ -101,6 +105,29 @@ uint8_t *receive_audio_fragment(int rank, int *out_chunk_size, uint64_t *out_glo
     return my_chunk;
 }
 
+/**
+ * @brief Sends a worker's computed AudioFrameResult to the master rank (0)
+ *        using a collective MPI_Gather operation over raw bytes.
+ *
+ * All ranks must participate in this collective operation.
+ *
+ * @param local_result Pointer to the worker's computed AudioFrameResult.
+ * @return int MPI_SUCCESS on success, or an MPI error code on failure.
+ */
+static int send_audio_results(const AudioFrameResult *local_result)
+{
+    // 1. Ensure the worker has a valid result structure to send.
+    if (!local_result)
+    {
+        return MPI_ERR_ARG;
+    }
+
+    // 2. Participate in MPI_Gather toward root rank 0 sending raw struct bytes.
+    return MPI_Gather(local_result, (int)sizeof(*local_result), MPI_BYTE,
+                      NULL, 0, MPI_BYTE,
+                      0, MPI_COMM_WORLD);
+}
+
 void run_worker_node(int rank)
 {
     // 1. Receive broadcasted audio configuration
@@ -138,7 +165,7 @@ void run_worker_node(int rank)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 4.2 Run FFT, 5-band LED mapping, and BPM estimation
+    // 4 Run FFT, 5-band LED mapping, and BPM estimation
     AudioFrameResult results = {0};
     if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, &audio_cfg, &results) < 0)
     {
@@ -147,12 +174,17 @@ void run_worker_node(int rank)
         free(xor_key);
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    printf("[Worker %d] Frames: %zu | BPM: %.1f | LEDs: [%d, %d, %d, %d, %d]\n",
-           rank, results.frames_processed, results.bpm,
-           results.led_heights[0], results.led_heights[1], results.led_heights[2],
-           results.led_heights[3], results.led_heights[4]);
 
-    // 4. Clean resources
+    // 5. Send results to master
+    if (send_audio_results(&results) != MPI_SUCCESS)
+    {
+        fprintf(stderr, "[Worker %d Error] Failed to gather audio result to master.\n", rank);
+        free(my_chunk);
+        free(xor_key);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    // 6. Clean resources
     free(my_chunk);
     free(xor_key);
 }

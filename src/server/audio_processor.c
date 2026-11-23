@@ -1,8 +1,11 @@
+// ======================================================
+// FFTW3 Audio Spectral & Tempo Processor Implementation
+// ======================================================
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <fftw3.h>
-#include <ctype.h>
 #include <string.h>
 #include "audio_processor.h"
 
@@ -176,32 +179,6 @@ static double *create_hann_window(size_t window_size)
     }
 
     return hann_window;
-}
-
-/**
- * @brief Initializes an AudioFrameResult structure to default/zero values
- *        when no sliding windows can be analyzed.
- *
- * @param results Pointer to AudioFrameResult to reset (may be NULL).
- * @param default_bpm Fallback tempo in BPM assigned to results->bpm.
- */
-static void reset_summary_defaults(AudioFrameResult *results, float default_bpm)
-{
-    if (!results)
-    {
-        return;
-    }
-
-    for (int b = 0; b < AUDIO_NUM_BANDS; b++)
-    {
-        results->led_heights[b] = 0;
-        results->band_rms[b] = 0.0;
-    }
-    results->bpm = default_bpm;
-    results->overall_rms = 0.0;
-    results->spectral_centroid_hz = 0.0;
-    results->low_to_high_ratio = 0.0;
-    results->frames_processed = 0;
 }
 
 /**
@@ -459,6 +436,32 @@ static size_t run_window_analysis_loop(const int16_t *samples, size_t total_samp
 
     // 6. Return total processed window count
     return frames;
+}
+
+/**
+ * @brief Initializes an AudioFrameResult structure to default/zero values
+ *        when no sliding windows can be analyzed.
+ *
+ * @param results Pointer to AudioFrameResult to reset (may be NULL).
+ * @param default_bpm Fallback tempo in BPM assigned to results->bpm.
+ */
+static void reset_summary_defaults(AudioFrameResult *results, float default_bpm)
+{
+    if (!results)
+    {
+        return;
+    }
+
+    for (int b = 0; b < AUDIO_NUM_BANDS; b++)
+    {
+        results->led_heights[b] = 0;
+        results->band_rms[b] = 0.0;
+    }
+    results->bpm = default_bpm;
+    results->overall_rms = 0.0;
+    results->spectral_centroid_hz = 0.0;
+    results->low_to_high_ratio = 0.0;
+    results->frames_processed = 0;
 }
 
 int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
