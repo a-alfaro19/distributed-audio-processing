@@ -10,10 +10,14 @@
  */
 typedef struct
 {
-    int led_heights[AUDIO_NUM_BANDS]; // Normalized heights [0..5] for Sub-bass, Mid-bass, Mid, Upper-mid, High
-    float bpm;                        // Estimated tempo in BPM
-    size_t frames_processed;          // Total sliding windows analyzed in this chunk
-} AudioAnalysisSummary;
+    int led_heights[AUDIO_NUM_BANDS]; /**< Normalized LED heights [0..5] across the 5 frequency bands. */
+    double band_rms[AUDIO_NUM_BANDS]; /**< Raw RMS amplitude per band for classification/heuristics. */
+    float bpm;                        /**< Estimated tempo in beats per minute (BPM). */
+    double overall_rms;               /**< Global RMS energy across the analyzed audio. */
+    double spectral_centroid_hz;      /**< Weighted average frequency (Hz) indicating brightness. */
+    double low_to_high_ratio;         /**< Ratio of low-band energy to high-band energy. */
+    size_t frames_processed;          /**< Total sliding windows analyzed in this chunk. */
+} AudioFrameResult;
 
 /**
  * @brief Orchestrates windowing, FFTW3 spectral analysis, 5-band RMS LED mapping,
@@ -22,11 +26,11 @@ typedef struct
  * @param pcm_buffer Pointer to decrypted PCM audio samples.
  * @param num_bytes Size of pcm_buffer in bytes.
  * @param config Loaded and validated audio configuration.
- * @param out_summary Optional pointer to receive the analysis summary (may be NULL).
+ * @param out_results Optional pointer to receive the analysis summary (may be NULL).
  * @return int 0 on success, or -1 on error.
  */
 int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
                         const AudioFormatConfig *config,
-                        AudioAnalysisSummary *out_summary);
+                        AudioFrameResult *out_results);
 
 #endif /* AUDIO_PROCESSOR_H */

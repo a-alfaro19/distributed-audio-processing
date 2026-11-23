@@ -289,7 +289,7 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 9.1 Decrypt audio chunk
+    // 8 Decrypt audio chunk
     if (decrypt_buffer(my_chunk, my_chunk_size, (const uint8_t *)xor_key, key_len, my_global_offset) < 0)
     {
         fprintf(stderr, "[Master Error] Failed to decrypt audio chunk.\n");
@@ -298,9 +298,9 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 9.2 Run FFT, 5-band LED mapping, and BPM estimation
-    AudioAnalysisSummary summary = {0};
-    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, &audio_cfg, &summary) < 0)
+    // 9 Run FFT, 5-band LED mapping, and BPM estimation
+    AudioFrameResult results = {0};
+    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, &audio_cfg, &results) < 0)
     {
         fprintf(stderr, "[Master Error] Audio processing failed.\n");
         free(my_chunk);
@@ -308,11 +308,11 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
     printf("[Master] Frames: %zu | BPM: %.1f | LEDs: [%d, %d, %d, %d, %d]\n",
-           summary.frames_processed, summary.bpm,
-           summary.led_heights[0], summary.led_heights[1], summary.led_heights[2],
-           summary.led_heights[3], summary.led_heights[4]);
+           results.frames_processed, results.bpm,
+           results.led_heights[0], results.led_heights[1], results.led_heights[2],
+           results.led_heights[3], results.led_heights[4]);
 
-    // 8. Clean up resources
+    // 10. Clean up resources
     free(my_chunk);
     free(sendcounts);
     free(displs);

@@ -139,8 +139,8 @@ void run_worker_node(int rank)
     }
 
     // 4.2 Run FFT, 5-band LED mapping, and BPM estimation
-    AudioAnalysisSummary summary = {0};
-    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, &audio_cfg, &summary) < 0)
+    AudioFrameResult results = {0};
+    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, &audio_cfg, &results) < 0)
     {
         fprintf(stderr, "[Worker %d Error] Audio processing failed.\n", rank);
         free(my_chunk);
@@ -148,9 +148,9 @@ void run_worker_node(int rank)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
     printf("[Worker %d] Frames: %zu | BPM: %.1f | LEDs: [%d, %d, %d, %d, %d]\n",
-           rank, summary.frames_processed, summary.bpm,
-           summary.led_heights[0], summary.led_heights[1], summary.led_heights[2],
-           summary.led_heights[3], summary.led_heights[4]);
+           rank, results.frames_processed, results.bpm,
+           results.led_heights[0], results.led_heights[1], results.led_heights[2],
+           results.led_heights[3], results.led_heights[4]);
 
     // 4. Clean resources
     free(my_chunk);

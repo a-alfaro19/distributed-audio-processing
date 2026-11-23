@@ -179,6 +179,32 @@ static double *create_hann_window(size_t window_size)
 }
 
 /**
+ * @brief Initializes an AudioFrameResult structure to default/zero values
+ *        when no sliding windows can be analyzed.
+ *
+ * @param results Pointer to AudioFrameResult to reset (may be NULL).
+ * @param default_bpm Fallback tempo in BPM assigned to results->bpm.
+ */
+static void reset_summary_defaults(AudioFrameResult *results, float default_bpm)
+{
+    if (!results)
+    {
+        return;
+    }
+
+    for (int b = 0; b < AUDIO_NUM_BANDS; b++)
+    {
+        results->led_heights[b] = 0;
+        results->band_rms[b] = 0.0;
+    }
+    results->bpm = default_bpm;
+    results->overall_rms = 0.0;
+    results->spectral_centroid_hz = 0.0;
+    results->low_to_high_ratio = 0.0;
+    results->frames_processed = 0;
+}
+
+/**
  * @brief Computes per-band RMS amplitudes from an FFT spectrum and maps them
  *        to normalized LED bar heights in the range [0, 5] using config settings.
  *
@@ -188,11 +214,13 @@ static double *create_hann_window(size_t window_size)
  * @param config Validated audio configuration containing band edges and RMS ceiling.
  * @param out_rms Output array receiving the RMS amplitude for each frequency band.
  * @param out_leds Output array receiving the clamped LED height [0..5] per band.
+ * @param out_centroid_hz Output pointer receiving the frame spectral centroid in Hz.
  */
 static void compute_band_rms_and_leds(const fftw_complex *fft_out, size_t num_bins,
                                       size_t window_size, const AudioFormatConfig *config,
                                       double out_rms[AUDIO_NUM_BANDS],
-                                      int out_leds[AUDIO_NUM_BANDS])
+                                      int out_leds[AUDIO_NUM_BANDS],
+                                      double *out_centroid_hz)
 {
     // 1. Initialize per-band squared-magnitude accumulators, bin counters, and amplitude scale
     double energy_sum[AUDIO_NUM_BANDS] = {0.0};
@@ -200,18 +228,25 @@ static void compute_band_rms_and_leds(const fftw_complex *fft_out, size_t num_bi
     const double norm_factor = 2.0 / (double)window_size;
     const double *edges = config->band_edges_hz;
 
+    double weighted_freq_sum = 0.0;
+    double magnitude_sum = 0.0;
+
     // 2. Accumulate squared bin magnitudes into their corresponding frequency bands (skipping DC at k = 0)
     for (size_t k = 1; k < num_bins; k++)
     {
         double freq_hz = ((double)k * config->sample_rate) / (double)window_size;
+        double re = fft_out[k][0] * norm_factor;
+        double im = fft_out[k][1] * norm_factor;
+        double mag = sqrt((re * re) + (im * im));
+        double mag_sq = mag * mag;
+
+        weighted_freq_sum += freq_hz * mag;
+        magnitude_sum += mag;
+
         if (freq_hz < edges[0] || freq_hz >= edges[AUDIO_NUM_BANDS])
         {
             continue;
         }
-
-        double re = fft_out[k][0] * norm_factor;
-        double im = fft_out[k][1] * norm_factor;
-        double mag_sq = (re * re) + (im * im);
 
         for (int b = 0; b < AUDIO_NUM_BANDS; b++)
         {
@@ -238,6 +273,14 @@ static void compute_band_rms_and_leds(const fftw_complex *fft_out, size_t num_bi
         if (scaled > 5.0)
             scaled = 5.0;
         out_leds[b] = (int)llround(scaled);
+    }
+
+    // 4. Compute spectral centroid in Hz for this frame
+    if (out_centroid_hz)
+    {
+        *out_centroid_hz = (magnitude_sum > 1e-12)
+                               ? (weighted_freq_sum / magnitude_sum)
+                               : 0.0;
     }
 }
 
@@ -325,7 +368,7 @@ static float estimate_bpm(TempoTracker *tracker, const double current_rms[AUDIO_
 
 /**
  * @brief Iterates over overlapping PCM audio windows, executes the FFTW transform,
- *        and updates LED band levels and BPM estimates for each frame.
+ *        and updates LED band levels, classification metrics, and BPM estimates for each frame.
  *
  * @param samples Pointer to 16-bit signed PCM audio samples.
  * @param total_samples Total number of available PCM samples in samples.
@@ -339,6 +382,9 @@ static float estimate_bpm(TempoTracker *tracker, const double current_rms[AUDIO_
  * @param tracker Pointer to initialized TempoTracker state.
  * @param last_leds Output array storing the latest [0..5] LED heights per band.
  * @param out_bpm Output pointer receiving the latest smoothed BPM estimate.
+ * @param out_avg_rms Output array receiving averaged RMS amplitude per frequency band.
+ * @param out_avg_overall_rms Output pointer receiving averaged global RMS across processed windows.
+ * @param out_avg_centroid_hz Output pointer receiving averaged spectral centroid in Hz.
  * @return size_t Number of sliding window frames processed.
  */
 static size_t run_window_analysis_loop(const int16_t *samples, size_t total_samples,
@@ -346,7 +392,10 @@ static size_t run_window_analysis_loop(const int16_t *samples, size_t total_samp
                                        const double *hann_window,
                                        double *in, fftw_complex *out, fftw_plan plan,
                                        const AudioFormatConfig *config, TempoTracker *tracker,
-                                       int last_leds[AUDIO_NUM_BANDS], float *out_bpm)
+                                       int last_leds[AUDIO_NUM_BANDS], float *out_bpm,
+                                       double out_avg_rms[AUDIO_NUM_BANDS],
+                                       double *out_avg_overall_rms,
+                                       double *out_avg_centroid_hz)
 {
     // 1. Initialize output bin count, per-band RMS scratch buffer, and frame counter
     const size_t num_bins = window_size / 2 + 1;
@@ -354,12 +403,18 @@ static size_t run_window_analysis_loop(const int16_t *samples, size_t total_samp
     size_t frames = 0;
 
     // 2. Slide across the PCM sample stream in hop_size increments
+    double rms_acc[AUDIO_NUM_BANDS] = {0.0};
+    double overall_rms_acc = 0.0;
+    double centroid_acc = 0.0;
     for (size_t i = 0; i + window_size <= total_samples; i += hop_size)
     {
         // 3. Normalize 16-bit PCM samples to [-1.0, 1.0] and apply the Hann window
+        double frame_sample_sq_sum = 0.0;
         for (size_t j = 0; j < window_size; j++)
         {
-            in[j] = ((double)samples[i + j] / 32768.0) * hann_window[j];
+            double sample_norm = (double)samples[i + j] / 32768.0;
+            frame_sample_sq_sum += sample_norm * sample_norm;
+            in[j] = sample_norm * hann_window[j];
         }
 
         // 4. Execute the forward real-to-complex FFT transform
@@ -367,11 +422,39 @@ static size_t run_window_analysis_loop(const int16_t *samples, size_t total_samp
 
         // 5. Compute frame timestamp, update LED band heights, and refine BPM estimate
         double frame_time_sec = (double)i / config->sample_rate;
+        double frame_centroid_hz = 0.0;
         compute_band_rms_and_leds(out, num_bins, window_size, config,
-                                  band_rms, last_leds);
+                                  band_rms, last_leds, &frame_centroid_hz);
         *out_bpm = estimate_bpm(tracker, band_rms, frame_time_sec, config);
 
+        for (int b = 0; b < AUDIO_NUM_BANDS; b++)
+        {
+            rms_acc[b] += band_rms[b];
+        }
+        overall_rms_acc += sqrt(frame_sample_sq_sum / (double)window_size);
+        centroid_acc += frame_centroid_hz;
         frames++;
+    }
+
+    // 6. Store averaged metrics if requested
+    if (frames > 0)
+    {
+        double inv_frames = 1.0 / (double)frames;
+        for (int b = 0; b < AUDIO_NUM_BANDS; b++)
+        {
+            if (out_avg_rms)
+            {
+                out_avg_rms[b] = rms_acc[b] * inv_frames;
+            }
+        }
+        if (out_avg_overall_rms)
+        {
+            *out_avg_overall_rms = overall_rms_acc * inv_frames;
+        }
+        if (out_avg_centroid_hz)
+        {
+            *out_avg_centroid_hz = centroid_acc * inv_frames;
+        }
     }
 
     // 6. Return total processed window count
@@ -380,7 +463,7 @@ static size_t run_window_analysis_loop(const int16_t *samples, size_t total_samp
 
 int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
                         const AudioFormatConfig *config,
-                        AudioAnalysisSummary *out_summary)
+                        AudioFrameResult *out_results)
 {
     // 1. Validate buffer, byte count, and loaded configuration
     if (!pcm_buffer || num_bytes == 0 || !config)
@@ -409,14 +492,8 @@ int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
         fprintf(stderr, "[FFT Warning] Buffer size (%zu samples) is smaller than the FFT window (%zu).\n",
                 total_samples, window_size);
 
-        // Clean out summary
-        if (out_summary)
-        {
-            for (int b = 0; b < AUDIO_NUM_BANDS; b++)
-                out_summary->led_heights[b] = 0;
-            out_summary->bpm = config->default_bpm;
-            out_summary->frames_processed = 0;
-        }
+        // Clean out results
+        reset_summary_defaults(out_results, config->default_bpm);
         return 0;
     }
 
@@ -448,22 +525,42 @@ int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
         return -1;
     }
 
-    // 8. Execute sliding-window FFT analysis, LED mapping, BPM estimation, and populate summary
+    // 8. Execute sliding-window FFT analysis, LED mapping, BPM estimation, and populate results
     int leds[AUDIO_NUM_BANDS] = {0};
+    double avg_band_rms[AUDIO_NUM_BANDS] = {0.0};
+    double avg_overall_rms = 0.0;
+    double avg_centroid_hz = 0.0;
     float bpm = config->default_bpm;
+
     size_t frames = run_window_analysis_loop(samples, total_samples, window_size, hop_size,
                                              hann_window, in, out, plan, config,
-                                             &tracker, leds, &bpm);
+                                             &tracker, leds, &bpm,
+                                             avg_band_rms, &avg_overall_rms, &avg_centroid_hz);
 
-    // 9. Save results on summary
-    if (out_summary)
+    // 9. Save results
+    if (out_results)
     {
+        double low_energy = 0.0;
+        double high_energy = 0.0;
+
         for (int b = 0; b < AUDIO_NUM_BANDS; b++)
         {
-            out_summary->led_heights[b] = leds[b];
+            out_results->led_heights[b] = leds[b];
+            out_results->band_rms[b] = (frames > 0) ? avg_band_rms[b] : 0.0;
         }
-        out_summary->bpm = bpm;
-        out_summary->frames_processed = frames;
+
+        low_energy = (out_results->band_rms[0] * out_results->band_rms[0]) +
+                     (out_results->band_rms[1] * out_results->band_rms[1]);
+        high_energy = (out_results->band_rms[3] * out_results->band_rms[3]) +
+                      (out_results->band_rms[4] * out_results->band_rms[4]);
+
+        out_results->bpm = bpm;
+        out_results->overall_rms = (frames > 0) ? avg_overall_rms : 0.0;
+        out_results->spectral_centroid_hz = (frames > 0) ? avg_centroid_hz : 0.0;
+        out_results->low_to_high_ratio = (high_energy > 1e-12)
+                                             ? (low_energy / high_energy)
+                                             : low_energy;
+        out_results->frames_processed = frames;
     }
 
     // 10. Clean up tempo tracker, Hann window, and FFTW resources
