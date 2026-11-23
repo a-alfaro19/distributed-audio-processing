@@ -16,7 +16,7 @@ make run-server
 On a different terminal run:
 
 ```bash
-gcc -Wall -Wextra -std=gnu99 -Iinclude dummy_client.c build/lib/libcrypto.a build/lib/libcommon.a -o bin/dummy_client 
+gcc -Wall -Wextra -std=gnu99 -Iinclude dummy_client.c build/lib/libcrypto.a build/lib/libcommon.a -o bin/dummy_client  -lm
 . ./.env
 ./bin/dummy_client
 ```

@@ -3,7 +3,7 @@
 #include <mpi.h>
 #include <inttypes.h>
 #include "crypto/cifrado.h"
-#include "fft_processor.h"
+#include "audio_processor.h"
 
 /**
  * @brief Receives the XOR encryption key and its length from the Master node.
@@ -108,15 +108,17 @@ void run_worker_node(int rank)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 4. Apply FFT to the audio chunks
-    if (process_audio_fft(my_chunk, my_chunk_size) < 0)
+    // 4. Run FFT, 5-band LED mapping, and BPM estimation
+    AudioAnalysisSummary summary = {0};
+    const double sample_rate = 44100.0;
+
+    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, sample_rate, &summary) < 0)
     {
-        fprintf(stderr, "[Worker %d Error] FFT processing failed.\n", rank);
+        fprintf(stderr, "[Worker %d Error] Audio processing failed. Aborting process.\n", rank);
         free(my_chunk);
         free(xor_key);
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
-    printf("[Worker %d] ¡Procesamiento FFT completado en el fragmento local!\n", rank);
 
     // 4. Clean resources
     free(my_chunk);
