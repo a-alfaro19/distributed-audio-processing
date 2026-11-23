@@ -1,4 +1,37 @@
-# Cliente y cifrado de WAV
+# distributed-audio-processing
+Sistema distribuido en C para procesamiento de audio con MPI y TCP/IP, incluyendo servidor/clúster, cliente WAV con cifrado XOR y utilidades de análisis de audio.
+
+---
+
+## Servidor y clúster MPI (`feature/server-cluster`)
+
+### 1. Compilar y ejecutar el servidor
+
+En una terminal:
+
+```bash
+make run-server
+```
+
+### 2. Ejecutar el cliente de prueba (`dummy_client`)
+
+En otra terminal:
+
+```bash
+gcc -Wall -Wextra -std=gnu99 -Iinclude dummy_client.c build/lib/libcrypto.a build/lib/libcommon.a -o bin/dummy_client  -lm
+. ./.env
+./bin/dummy_client
+```
+
+### Nota de limpieza
+
+Se recomienda limpiar artefactos previos antes de compilar o ejecutar:
+
+```bash
+make clean
+```
+
+## Cliente y cifrado de WAV
 
 | Archivo | Qué hace |
 |---|---|
@@ -7,7 +40,7 @@
 | `include/client/cifrado.h` | Declara la función de cifrado para que la puedan usar otros módulos. |
 | `pruebas/receptor_prueba.py` | Recibe un archivo en la misma máquina y guarda el WAV recuperado. |
 
-## Probar en Linux
+### Probar en Linux
 
 Desde esta carpeta, ejecutá `make`. Usá cualquier WAV con encabezado RIFF/WAVE. En el ejemplo se llama `audio.wav`.
 
@@ -31,7 +64,7 @@ Cuando el receptor muestre «WAV recuperado», compará los archivos:
 cmp audio.wav recuperado.wav && echo "Archivos idénticos"
 ```
 
-# Analisis de audio para la matriz de 8 x 8
+## Analisis de audio para la matriz de 8 x 8
 
 El modulo recibe entre 1 y 2048 muestras PCM mono de 16 bits y su frecuencia
 de muestreo. Aplica Hann y una FFT de 2048 puntos. Agrupa la energia por
@@ -52,7 +85,7 @@ Cada rango empieza en su limite inferior y llega hasta el comienzo de la
 siguiente banda. Se usa una escala fija de -48 a 0 dBFS y se redondea al
 nivel mas cercano. Las alturas se pueden comparar de una ventana a otra.
 
-## Prueba local
+### Prueba local
 
 Desde esta carpeta:
 
@@ -64,7 +97,7 @@ La prueba genera silencio y un tono por banda. Para 440 Hz debe destacar
 la tercera columna entre las siete bandas. La octava tambien puede
 encenderse porque representa el volumen total.
 
-## Probar el WAV recuperado
+### Probar el WAV recuperado
 
 Desde esta carpeta, inicia el receptor en una terminal:
 

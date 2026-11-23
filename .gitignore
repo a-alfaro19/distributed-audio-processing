@@ -1,4 +1,17 @@
+# VS Code files
+.vscode/
+
+# Output files
+bin/
+build/
+
+# Secret files
+.env
+
+# Input files
 *.wav
+
+# Others
 cliente
 prueba_fft
 prueba_wav

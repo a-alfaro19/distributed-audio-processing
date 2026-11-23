@@ -1,0 +1,13 @@
+# ==========================================
+# OpenMPI Cluster Configuration File
+# ==========================================
+
+# Syntax: <IP address/hostname> slots=<number of processes> 
+
+# Local Development Configuration: run 3 virtual processes on a single host
+localhost slots=3
+
+# Production Cluster Configuration: distribute processes across physical nodes
+# <Master Node IP> slots=2
+# <Worker Node 1 IP> slots=1
+# <Worker Node 2 IP> slots=1
