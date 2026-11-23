@@ -35,7 +35,7 @@ $(BUILD_ROOT)/%.o: %.c
 
 # Run rule: execute the MPI cluster locally using the hostfile
 run: $(TARGET)
-	mpirun -np 3 --hostfile hostfile ./$(TARGET)
+	. ../../.env && mpirun -np 3 --hostfile hostfile ./$(TARGET)
 
 # Clean rule: remove compiled binaries
 clean:

@@ -12,6 +12,8 @@
 #include <sys/socket.h>
 #include "master.h"
 #include "socket_server.h"
+#include "audio_config.h"
+#include "audio_processor.h"
 #include <common/byte_utils.h>
 #include <crypto/cifrado.h>
 
@@ -19,24 +21,24 @@
 #define HEADER_SIZE 8
 
 /**
- * @brief Decrypts a byte buffer in-place using XOR with a given stream offset.
+ * @brief Sends the audio configuration from the master to all MPI ranks.
  *
- * @param buffer Pointer to the encrypted data buffer.
- * @param length Number of bytes to decrypt.
- * @param key XOR encryption key.
- * @param key_len Length of the XOR key.
- * @param offset Stream byte offset to keep the XOR key synchronized.
- * @return int 0 on success, or -1 on decryption failure.
+ * All ranks must participate in this collective operation by calling the
+ * corresponding receive function.
+ *
+ * @param config Pointer to the configuration loaded by the master.
+ * @return MPI_SUCCESS on success, or an MPI error code on failure.
  */
-static int decrypt_buffer(uint8_t *buffer, size_t length, const uint8_t *key,
-                          size_t key_len, uint64_t offset)
+static int send_audio_config(AudioFormatConfig *config)
 {
-    if (aplicar_xor(buffer, length, key, key_len, offset) < 0)
+    // 1. Ensure the master has a valid configuration to send.
+    if (!config)
     {
-        fprintf(stderr, "[Master Error] XOR decryption failed at offset %lu.\n", offset);
-        return -1;
+        return MPI_ERR_ARG;
     }
-    return 0;
+
+    // 2. Broadcast the complete configuration structure as bytes.
+    return MPI_Bcast(config, (int)sizeof(*config), MPI_BYTE, 0, MPI_COMM_WORLD);
 }
 
 /**
@@ -208,7 +210,20 @@ static int distribute_audio_work(const uint8_t *audio_buffer, const char *xor_ke
 
 void run_master_node(int size)
 {
-    // 1. Retrieve XOR key
+    // 1. Load audio processor configuration and broadcast to workers
+    AudioFormatConfig audio_cfg;
+    if (load_audio_config(&audio_cfg) < 0)
+    {
+        fprintf(stderr, "[Master Error] Failed to load audio configuration.\n");
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    if (send_audio_config(&audio_cfg) != MPI_SUCCESS)
+    {
+        fprintf(stderr, "[Master Error] Failed to broadcast audio configuration.\n");
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    // 2. Retrieve XOR key
     const char *xor_key = getenv("AUDIO_XOR_KEY");
     if (xor_key == NULL || *xor_key == '\0')
     {
@@ -217,7 +232,7 @@ void run_master_node(int size)
     }
     size_t key_len = strlen(xor_key);
 
-    // 2. Initialize the TCP server
+    // 3. Initialize the TCP server
     int server_fd, client_fd;
     server_fd = init_tcp_server(PORT);
     if (server_fd < 0)
@@ -225,7 +240,7 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 3. Accept incoming connection from client
+    // 4. Accept incoming connection from client
     client_fd = accept_client_connection(server_fd);
     if (client_fd < 0)
     {
@@ -233,7 +248,7 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 4. Read audio stream from client
+    // 5. Read audio stream from client
     uint8_t *audio_buffer = NULL;
     uint64_t audio_file_size = 0;
     if (read_audio_stream(client_fd, (const uint8_t *)xor_key, key_len,
@@ -244,7 +259,7 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 5. Fragment audio stream in chunk
+    // 6. Fragment audio stream in chunk
     int *sendcounts = NULL;
     int *displs = NULL;
     uint64_t *offsets = NULL;
@@ -257,7 +272,7 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 6. Distribute work among the workers
+    // 7. Distribute work among the workers
     uint8_t *my_chunk = NULL;
     int my_chunk_size = 0;
     uint64_t my_global_offset = 0;
@@ -274,7 +289,30 @@ void run_master_node(int size)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 7. Clean up resources
+    // 9.1 Decrypt audio chunk
+    if (decrypt_buffer(my_chunk, my_chunk_size, (const uint8_t *)xor_key, key_len, my_global_offset) < 0)
+    {
+        fprintf(stderr, "[Master Error] Failed to decrypt audio chunk.\n");
+        free(my_chunk);
+        free(xor_key);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    // 9.2 Run FFT, 5-band LED mapping, and BPM estimation
+    AudioAnalysisSummary summary = {0};
+    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, &audio_cfg, &summary) < 0)
+    {
+        fprintf(stderr, "[Master Error] Audio processing failed.\n");
+        free(my_chunk);
+        free(xor_key);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    printf("[Master] Frames: %zu | BPM: %.1f | LEDs: [%d, %d, %d, %d, %d]\n",
+           summary.frames_processed, summary.bpm,
+           summary.led_heights[0], summary.led_heights[1], summary.led_heights[2],
+           summary.led_heights[3], summary.led_heights[4]);
+
+    // 8. Clean up resources
     free(my_chunk);
     free(sendcounts);
     free(displs);

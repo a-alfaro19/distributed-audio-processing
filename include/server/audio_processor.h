@@ -3,10 +3,11 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "audio_config.h"
 
-#define AUDIO_FFT_WINDOW_SIZE 2048
-#define AUDIO_NUM_BANDS 5
-
+/**
+ * @brief Summary output produced after analyzing a PCM audio chunk.
+ */
 typedef struct
 {
     int led_heights[AUDIO_NUM_BANDS]; // Normalized heights [0..5] for Sub-bass, Mid-bass, Mid, Upper-mid, High
@@ -16,15 +17,16 @@ typedef struct
 
 /**
  * @brief Orchestrates windowing, FFTW3 spectral analysis, 5-band RMS LED mapping,
- *        and tempo (BPM) estimation over a decrypted PCM audio chunk.
+ *        and tempo (BPM) estimation using parameters from audio.config.
  *
- * @param pcm_buffer Pointer to decrypted 16-bit signed PCM audio samples.
+ * @param pcm_buffer Pointer to decrypted PCM audio samples.
  * @param num_bytes Size of pcm_buffer in bytes.
- * @param sample_rate Sampling rate in Hz (e.g., 44100.0).
- * @param out_summary Optional pointer to receive the final analysis summary (may be NULL).
+ * @param config Loaded and validated audio configuration.
+ * @param out_summary Optional pointer to receive the analysis summary (may be NULL).
  * @return int 0 on success, or -1 on error.
  */
 int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
-                        double sample_rate, AudioAnalysisSummary *out_summary);
+                        const AudioFormatConfig *config,
+                        AudioAnalysisSummary *out_summary);
 
 #endif /* AUDIO_PROCESSOR_H */

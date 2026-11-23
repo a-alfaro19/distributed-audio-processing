@@ -3,7 +3,29 @@
 #include <mpi.h>
 #include <inttypes.h>
 #include "crypto/cifrado.h"
+#include "audio_config.h"
 #include "audio_processor.h"
+
+/**
+ * @brief Receives the audio configuration broadcast by the master.
+ *
+ * All MPI ranks must call this collective operation in the same order as the
+ * master's send function.
+ *
+ * @param config Pointer to the structure that will receive the configuration.
+ * @return MPI_SUCCESS on success, or an MPI error code on failure.
+ */
+static int receive_audio_config(AudioFormatConfig *config)
+{
+    // 1. Ensure the worker has a valid destination buffer.
+    if (!config)
+    {
+        return MPI_ERR_ARG;
+    }
+
+    // 2. Receive the complete configuration structure as bytes from rank 0.
+    return MPI_Bcast(config, (int)sizeof(*config), MPI_BYTE, 0, MPI_COMM_WORLD);
+}
 
 /**
  * @brief Receives the XOR encryption key and its length from the Master node.
@@ -81,6 +103,14 @@ uint8_t *receive_audio_fragment(int rank, int *out_chunk_size, uint64_t *out_glo
 
 void run_worker_node(int rank)
 {
+    // 1. Receive broadcasted audio configuration
+    AudioFormatConfig audio_cfg;
+    if (receive_audio_config(&audio_cfg) != MPI_SUCCESS)
+    {
+        fprintf(stderr, "[Worker %d Error] Failed to receive broadcasted audio configuration.\n", rank);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
     // 1. Receive XOR key
     int key_length = 0;
     char *xor_key = receive_xor_key(rank, &key_length);
@@ -108,17 +138,19 @@ void run_worker_node(int rank)
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
 
-    // 4. Run FFT, 5-band LED mapping, and BPM estimation
+    // 4.2 Run FFT, 5-band LED mapping, and BPM estimation
     AudioAnalysisSummary summary = {0};
-    const double sample_rate = 44100.0;
-
-    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, sample_rate, &summary) < 0)
+    if (process_audio_chunk(my_chunk, (size_t)my_chunk_size, &audio_cfg, &summary) < 0)
     {
-        fprintf(stderr, "[Worker %d Error] Audio processing failed. Aborting process.\n", rank);
+        fprintf(stderr, "[Worker %d Error] Audio processing failed.\n", rank);
         free(my_chunk);
         free(xor_key);
         MPI_Abort(MPI_COMM_WORLD, 1);
     }
+    printf("[Worker %d] Frames: %zu | BPM: %.1f | LEDs: [%d, %d, %d, %d, %d]\n",
+           rank, summary.frames_processed, summary.bpm,
+           summary.led_heights[0], summary.led_heights[1], summary.led_heights[2],
+           summary.led_heights[3], summary.led_heights[4]);
 
     // 4. Clean resources
     free(my_chunk);

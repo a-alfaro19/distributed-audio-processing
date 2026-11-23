@@ -2,24 +2,13 @@
 #include <stdlib.h>
 #include <math.h>
 #include <fftw3.h>
+#include <ctype.h>
+#include <string.h>
 #include "audio_processor.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
-
-/**
- * @brief Frequency band boundary edges in Hz for the 5 LED columns:
- *        Sub-bass (20-60 Hz), Mid-bass (60-250 Hz), Mid (250-2000 Hz),
- *        Upper-mid (2000-4000 Hz), and High (4000-20000 Hz).
- */
-static const double BAND_EDGES_HZ[AUDIO_NUM_BANDS + 1] = {
-    20.0, 60.0, 250.0, 2000.0, 4000.0, 20000.0};
-
-static const double BAND_RMS_CEILING = 0.25;      // RMS amplitude ceiling
-static const double MIN_BEAT_INTERVAL_SEC = 0.28; // Minimum time interval (in seconds)
-static const double ONSET_FLUX_THRESHOLD = 0.035; // Positive spectral flux threshold
-static const size_t MAX_ONSET_HISTORY = 32;       // Maximum number of recent beat onset timestamps
 
 /**
  * @brief Maintains temporal state across sliding audio windows for beat onset
@@ -104,41 +93,16 @@ static void free_fft_resources(double *in, fftw_complex *out, fftw_plan plan)
 }
 
 /**
- * @brief Allocates and pre-computes the Hann window coefficients to minimize spectral leakage.
- *
- * @param window_size Size of the FFT window.
- * @return double* Dynamically allocated array of Hann window coefficients, or NULL on failure.
- */
-static double *create_hann_window(size_t window_size)
-{
-    // 1. Allocate memory for the Hann window coefficient buffer
-    double *hann_window = (double *)malloc(sizeof(double) * window_size);
-    if (!hann_window)
-    {
-        fprintf(stderr, "[AudioProcessorError] Failed to allocate Hann window buffer.\n");
-        return NULL;
-    }
-
-    // 2. Compute the Hann window weighting coefficients to minimize spectral leakage
-    for (size_t i = 0; i < window_size; i++)
-    {
-        hann_window[i] = 0.5 * (1.0 - cos((2.0 * M_PI * i) / (window_size - 1)));
-    }
-
-    return hann_window;
-}
-
-/**
  * @brief Initializes a TempoTracker instance and allocates its onset timestamp buffer.
  *
  * @param tracker Pointer to the TempoTracker structure to initialize.
  * @param capacity Maximum number of beat onset timestamps to store.
  * @return int 0 on success, or -1 on invalid arguments or allocation failure.
  */
-static int init_tempo_tracker(TempoTracker *tracker, size_t capacity)
+static int init_tempo_tracker(TempoTracker *tracker, size_t capacity, float initial_bpm)
 {
     // 1. Validate inputs
-    if (!tracker || capacity < 2)
+    if (!tracker || capacity < 2 || initial_bpm <= 0.0f)
     {
         return -1;
     }
@@ -162,7 +126,7 @@ static int init_tempo_tracker(TempoTracker *tracker, size_t capacity)
     tracker->onset_count = 0;
     tracker->onset_capacity = capacity;
     tracker->last_onset_time_sec = -10.0;
-    tracker->current_bpm = 120.0f;
+    tracker->current_bpm = initial_bpm;
     return 0;
 }
 
@@ -190,18 +154,43 @@ static void free_tempo_tracker(TempoTracker *tracker)
 }
 
 /**
+ * @brief Allocates and pre-computes the Hann window coefficients to minimize spectral leakage.
+ *
+ * @param window_size Size of the FFT window.
+ * @return double* Dynamically allocated array of Hann window coefficients, or NULL on failure.
+ */
+static double *create_hann_window(size_t window_size)
+{
+    // 1. Allocate memory for the Hann window coefficient buffer
+    double *hann_window = (double *)malloc(sizeof(double) * window_size);
+    if (!hann_window)
+    {
+        fprintf(stderr, "[AudioProcessorError] Failed to allocate Hann window buffer.\n");
+        return NULL;
+    }
+
+    // 2. Compute the Hann window weighting coefficients to minimize spectral leakage
+    for (size_t i = 0; i < window_size; i++)
+    {
+        hann_window[i] = 0.5 * (1.0 - cos((2.0 * M_PI * i) / (window_size - 1)));
+    }
+
+    return hann_window;
+}
+
+/**
  * @brief Computes per-band RMS amplitudes from an FFT spectrum and maps them
- *        to normalized LED bar heights in the range [0, 5].
+ *        to normalized LED bar heights in the range [0, 5] using config settings.
  *
  * @param fft_out Complex frequency bins produced by an FFTW real-to-complex transform.
  * @param num_bins Total number of bins in fft_out (window_size / 2 + 1).
  * @param window_size FFT window length in samples used for frequency and amplitude scaling.
- * @param sample_rate Audio sampling rate in Hz.
+ * @param config Validated audio configuration containing band edges and RMS ceiling.
  * @param out_rms Output array receiving the RMS amplitude for each frequency band.
  * @param out_leds Output array receiving the clamped LED height [0..5] per band.
  */
 static void compute_band_rms_and_leds(const fftw_complex *fft_out, size_t num_bins,
-                                      size_t window_size, double sample_rate,
+                                      size_t window_size, const AudioFormatConfig *config,
                                       double out_rms[AUDIO_NUM_BANDS],
                                       int out_leds[AUDIO_NUM_BANDS])
 {
@@ -209,12 +198,13 @@ static void compute_band_rms_and_leds(const fftw_complex *fft_out, size_t num_bi
     double energy_sum[AUDIO_NUM_BANDS] = {0.0};
     size_t bin_counts[AUDIO_NUM_BANDS] = {0};
     const double norm_factor = 2.0 / (double)window_size;
+    const double *edges = config->band_edges_hz;
 
     // 2. Accumulate squared bin magnitudes into their corresponding frequency bands (skipping DC at k = 0)
     for (size_t k = 1; k < num_bins; k++)
     {
-        double freq_hz = ((double)k * sample_rate) / (double)window_size;
-        if (freq_hz < BAND_EDGES_HZ[0] || freq_hz >= BAND_EDGES_HZ[AUDIO_NUM_BANDS])
+        double freq_hz = ((double)k * config->sample_rate) / (double)window_size;
+        if (freq_hz < edges[0] || freq_hz >= edges[AUDIO_NUM_BANDS])
         {
             continue;
         }
@@ -225,7 +215,7 @@ static void compute_band_rms_and_leds(const fftw_complex *fft_out, size_t num_bi
 
         for (int b = 0; b < AUDIO_NUM_BANDS; b++)
         {
-            if (freq_hz >= BAND_EDGES_HZ[b] && freq_hz < BAND_EDGES_HZ[b + 1])
+            if (freq_hz >= edges[b] && freq_hz < edges[b + 1])
             {
                 energy_sum[b] += mag_sq;
                 bin_counts[b]++;
@@ -242,29 +232,27 @@ static void compute_band_rms_and_leds(const fftw_complex *fft_out, size_t num_bi
                          : 0.0;
         out_rms[b] = rms;
 
-        double scaled = (rms / BAND_RMS_CEILING) * 5.0;
+        double scaled = (rms / config->band_rms_ceiling) * 5.0;
         if (scaled < 0.0)
             scaled = 0.0;
         if (scaled > 5.0)
             scaled = 5.0;
         out_leds[b] = (int)llround(scaled);
     }
-
-    fprintf(stderr, "[Debug RMS] B0=%.5f B1=%.5f B2=%.5f B3=%.5f B4=%.5f | LEDs=[%d,%d,%d,%d,%d]\n",
-            out_rms[0], out_rms[1], out_rms[2], out_rms[3], out_rms[4],
-            out_leds[0], out_leds[1], out_leds[2], out_leds[3], out_leds[4]);
 }
 
 /**
- * @brief Updates beat onset history from low-band spectral flux and estimates tempo in BPM.
+ * @brief Updates beat onset history from low-band spectral flux and estimates tempo in BPM
+ *        using threshold parameters from config.
  *
  * @param tracker Pointer to the initialized TempoTracker state.
  * @param current_rms Current frame RMS amplitude per frequency band.
  * @param frame_time_sec Timestamp of the current audio window in seconds.
+ * @param config Validated audio configuration containing onset and beat interval settings.
  * @return float Smoothed tempo estimate in beats per minute (BPM).
  */
 static float estimate_bpm(TempoTracker *tracker, const double current_rms[AUDIO_NUM_BANDS],
-                          double frame_time_sec)
+                          double frame_time_sec, const AudioFormatConfig *config)
 {
     // 1. Compute positive spectral flux across Sub-bass (0) and Mid-bass (1) bands
     double flux = 0.0;
@@ -288,8 +276,8 @@ static float estimate_bpm(TempoTracker *tracker, const double current_rms[AUDIO_
     tracker->has_prev_frame = 1;
 
     // 3. Register a new beat onset if flux exceeds threshold and refractory period has passed
-    if (flux > ONSET_FLUX_THRESHOLD &&
-        (frame_time_sec - tracker->last_onset_time_sec) >= MIN_BEAT_INTERVAL_SEC)
+    if (flux > config->onset_flux_threshold &&
+        (frame_time_sec - tracker->last_onset_time_sec) >= config->min_beat_interval_sec)
     {
         tracker->last_onset_time_sec = frame_time_sec;
 
@@ -343,11 +331,11 @@ static float estimate_bpm(TempoTracker *tracker, const double current_rms[AUDIO_
  * @param total_samples Total number of available PCM samples in samples.
  * @param window_size FFT window length in samples.
  * @param hop_size Step size in samples between consecutive sliding windows.
- * @param sample_rate Audio sampling rate in Hz.
  * @param hann_window Precomputed Hann window coefficients of length window_size.
  * @param in FFTW real input buffer of length window_size.
  * @param out FFTW complex output buffer of length (window_size / 2 + 1).
  * @param plan Pre-configured FFTW real-to-complex execution plan.
+ * @param config Validated audio configuration.
  * @param tracker Pointer to initialized TempoTracker state.
  * @param last_leds Output array storing the latest [0..5] LED heights per band.
  * @param out_bpm Output pointer receiving the latest smoothed BPM estimate.
@@ -355,10 +343,10 @@ static float estimate_bpm(TempoTracker *tracker, const double current_rms[AUDIO_
  */
 static size_t run_window_analysis_loop(const int16_t *samples, size_t total_samples,
                                        size_t window_size, size_t hop_size,
-                                       double sample_rate, const double *hann_window,
+                                       const double *hann_window,
                                        double *in, fftw_complex *out, fftw_plan plan,
-                                       TempoTracker *tracker, int last_leds[AUDIO_NUM_BANDS],
-                                       float *out_bpm)
+                                       const AudioFormatConfig *config, TempoTracker *tracker,
+                                       int last_leds[AUDIO_NUM_BANDS], float *out_bpm)
 {
     // 1. Initialize output bin count, per-band RMS scratch buffer, and frame counter
     const size_t num_bins = window_size / 2 + 1;
@@ -378,10 +366,10 @@ static size_t run_window_analysis_loop(const int16_t *samples, size_t total_samp
         fftw_execute(plan);
 
         // 5. Compute frame timestamp, update LED band heights, and refine BPM estimate
-        double frame_time_sec = (double)i / sample_rate;
-        compute_band_rms_and_leds(out, num_bins, window_size, sample_rate,
+        double frame_time_sec = (double)i / config->sample_rate;
+        compute_band_rms_and_leds(out, num_bins, window_size, config,
                                   band_rms, last_leds);
-        *out_bpm = estimate_bpm(tracker, band_rms, frame_time_sec);
+        *out_bpm = estimate_bpm(tracker, band_rms, frame_time_sec, config);
 
         frames++;
     }
@@ -391,22 +379,29 @@ static size_t run_window_analysis_loop(const int16_t *samples, size_t total_samp
 }
 
 int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
-                        double sample_rate, AudioAnalysisSummary *out_summary)
+                        const AudioFormatConfig *config,
+                        AudioAnalysisSummary *out_summary)
 {
-    // 1. Ensure the PCM buffer and sampling rate are valid and non-empty
-    if (!pcm_buffer || num_bytes == 0 || sample_rate <= 0.0)
+    // 1. Validate buffer, byte count, and loaded configuration
+    if (!pcm_buffer || num_bytes == 0 || !config)
     {
-        fprintf(stderr, "[AudioProcessor Error] Invalid PCM buffer passed for processing.\n");
+        fprintf(stderr, "[AudioProcessor Error] Invalid PCM buffer or config passed for processing.\n");
         return -1;
     }
 
-    // 2. Calculate total 16-bit signed PCM sample count and cast the byte buffer
-    size_t total_samples = num_bytes / sizeof(int16_t); // standard 16-bit signed PCM audio (2 bytes per sample)
+    // 2. Calculate total sample count from configured bit depth and channel count
+    const size_t bytes_per_sample = (size_t)(config->bits_per_sample / 8) *
+                                    (size_t)config->channels;
+    size_t total_samples = num_bytes / bytes_per_sample;
     const int16_t *samples = (const int16_t *)pcm_buffer;
 
-    // 3. Configure FFT window size and 50% hop size
-    size_t window_size = AUDIO_FFT_WINDOW_SIZE;
-    size_t hop_size = window_size / 2; // 50% overlap
+    // 3. Configure FFT window size and hop size from audio.config
+    size_t window_size = config->fft_window_size;
+    size_t hop_size = (size_t)((double)window_size * (1.0 - config->overlap_ratio));
+    if (hop_size == 0)
+    {
+        hop_size = 1;
+    }
 
     // 4. Ensure the buffer contains enough samples to fill at least one FFT window
     if (total_samples < window_size)
@@ -419,7 +414,7 @@ int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
         {
             for (int b = 0; b < AUDIO_NUM_BANDS; b++)
                 out_summary->led_heights[b] = 0;
-            out_summary->bpm = 120.0f;
+            out_summary->bpm = config->default_bpm;
             out_summary->frames_processed = 0;
         }
         return 0;
@@ -446,7 +441,7 @@ int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
     }
 
     // 7. Initialize temporal onset history and BPM tracking state
-    if (init_tempo_tracker(&tracker, MAX_ONSET_HISTORY) < 0)
+    if (init_tempo_tracker(&tracker, config->max_onset_history, config->default_bpm) < 0)
     {
         free(hann_window);
         free_fft_resources(in, out, plan);
@@ -455,9 +450,9 @@ int process_audio_chunk(const uint8_t *pcm_buffer, size_t num_bytes,
 
     // 8. Execute sliding-window FFT analysis, LED mapping, BPM estimation, and populate summary
     int leds[AUDIO_NUM_BANDS] = {0};
-    float bpm = 120.0f;
+    float bpm = config->default_bpm;
     size_t frames = run_window_analysis_loop(samples, total_samples, window_size, hop_size,
-                                             sample_rate, hann_window, in, out, plan,
+                                             hann_window, in, out, plan, config,
                                              &tracker, leds, &bpm);
 
     // 9. Save results on summary

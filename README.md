@@ -7,7 +7,6 @@
 On terminal run:
 
 ```bash
-. ./.env
 make run-server
 ```
 
@@ -19,4 +18,10 @@ On a different terminal run:
 gcc -Wall -Wextra -std=gnu99 -Iinclude dummy_client.c build/lib/libcrypto.a build/lib/libcommon.a -o bin/dummy_client  -lm
 . ./.env
 ./bin/dummy_client
+```
+
+### Note: Remember to always clean before running
+
+```bash
+make clean
 ```
