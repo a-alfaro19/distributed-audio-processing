@@ -22,6 +22,7 @@ SERVER_DIR = src/server
 # Library paths
 COMMON_LIB = $(BUILD_DIR)/lib/libcommon.a
 CRYPTO_LIB = $(BUILD_DIR)/lib/libcrypto.a
+AUDIO_LIB = $(BUILD_DIR)/lib/libaudio.a
 
 # Common module
 COMMON_SRCS = $(wildcard src/common/*.c)
@@ -31,10 +32,10 @@ COMMON_OBJS = $(patsubst src/common/%.c, $(BUILD_DIR)/lib/common/%.o, $(COMMON_S
 CRYPTO_SRCS = $(wildcard src/crypto/*.c)
 CRYPTO_OBJS = $(patsubst src/crypto/%.c, $(BUILD_DIR)/lib/crypto/%.o, $(CRYPTO_SRCS))
 
-.PHONY: all libs server run-server client cliente probar-fft clean clean-server
+.PHONY: all libs libaudio probar-libaudio demo-matriz server run-server client cliente probar-fft clean clean-server
 
 # Default target: compile everything essential
-all: libs server cliente
+all: libs libaudio server cliente
 
 # Build reusable libraries
 libs: $(COMMON_LIB) $(CRYPTO_LIB)
@@ -57,6 +58,34 @@ $(BUILD_DIR)/lib/common/%.o: src/common/%.c
 $(BUILD_DIR)/lib/crypto/%.o: src/crypto/%.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# ==========================================
+# libaudio.a: unico acceso al driver de la matriz 8x8
+# ==========================================
+libaudio: $(AUDIO_LIB)
+
+$(AUDIO_LIB): $(BUILD_DIR)/lib/audio/libaudio.o
+	@mkdir -p $(dir $@)
+	$(AR) $(ARFLAGS) $@ $^
+
+$(BUILD_DIR)/lib/audio/libaudio.o: src/lib/libaudio.c include/lib/libaudio.h src/driver/audiousb_ioctl.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Prueba sin hardware: valida argumentos usando /dev/null como dispositivo.
+probar-libaudio: $(BIN_DIR)/probar_libaudio
+	./$(BIN_DIR)/probar_libaudio
+
+$(BIN_DIR)/probar_libaudio: pruebas/probar_libaudio.c $(AUDIO_LIB)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $< $(AUDIO_LIB) -o $@
+
+# Demo con la matriz conectada (requiere el driver cargado).
+demo-matriz: $(BIN_DIR)/demo_matriz
+
+$(BIN_DIR)/demo_matriz: pruebas/demo_matriz.c $(AUDIO_LIB)
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) $< $(AUDIO_LIB) -o $@
 
 # ==========================================
 # Server / MPI Cluster Rules
@@ -95,4 +124,4 @@ prueba_wav: pruebas/probar_wav.c src/client/analisis_audio.c include/client/anal
 clean:
 		@echo "Cleaning binaries and objects..."
 		rm -rf $(BIN_DIR)/* $(BUILD_DIR)/*
-    rm -f cliente prueba_fft prueba_wav
+		rm -f cliente prueba_fft prueba_wav
