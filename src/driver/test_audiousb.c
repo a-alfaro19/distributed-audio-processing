@@ -1,8 +1,5 @@
-/*
- * test_audiousb.c - Prueba del driver sin necesitar libaudio.a
- * Uso: ./test_audiousb [/dev/audiousb0]
- */
 #include <stdio.h>
+#include <stdlib.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
@@ -10,6 +7,21 @@
 #include <sys/ioctl.h>
 
 #include "audiousb_ioctl.h"
+
+/* Con LOOPBACK=1 se lee el eco de la Pico despues de cada envio */
+static void drain(int fd)
+{
+	char buf[64];
+	ssize_t n;
+
+	if (!getenv("LOOPBACK"))
+		return;
+	n = read(fd, buf, sizeof(buf));
+	if (n < 0)
+		perror("read");
+	else
+		printf("  eco: %zd bytes\n", n);
+}
 
 int main(int argc, char **argv)
 {
@@ -27,24 +39,27 @@ int main(int argc, char **argv)
 
 	if (ioctl(fd, AUDIOUSB_IOC_SET_FRAME, &frame) < 0)
 		perror("SET_FRAME");
-	sleep(1);
+	drain(fd);
 
 	if (ioctl(fd, AUDIOUSB_IOC_SET_TIMING, &timing) < 0)
 		perror("SET_TIMING");
+	drain(fd);
 
 	if (ioctl(fd, AUDIOUSB_IOC_CLEAR) < 0)
 		perror("CLEAR");
+	drain(fd);
+
 	if (ioctl(fd, AUDIOUSB_IOC_SET_POINT, &point) < 0)
 		perror("SET_POINT");
-	sleep(1);
+	drain(fd);
 
-	/* Debe fallar con EINVAL: nivel fuera de rango */
+	/* Debe fallar con EINVAL: nivel fuera de rango (no llega a USB) */
 	if (ioctl(fd, AUDIOUSB_IOC_SET_FRAME, &bad) < 0)
 		printf("nivel invalido rechazado: %s (esperado)\n", strerror(errno));
 
-	/* Escritura cruda de un frame de 8 bytes */
 	if (write(fd, "\x08\x07\x06\x05\x04\x03\x02\x01", AUDIOUSB_FRAME_SIZE) < 0)
 		perror("write");
+	drain(fd);
 
 	close(fd);
 	return 0;

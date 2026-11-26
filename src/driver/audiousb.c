@@ -19,8 +19,8 @@
 #include "audiousb_ioctl.h"
 
 /* Deben coincidir con el descriptor USB del firmware de la Pico */
-#define VENDOR_ID        0x2E8A
-#define PRODUCT_ID       0x4001
+#define VENDOR_ID        0x0000
+#define PRODUCT_ID       0x0001
 
 #define DEVICE_NAME      "audiousb"
 #define MINOR_BASE       192
@@ -311,8 +311,8 @@ static int audiousb_probe(struct usb_interface *interface,
 		goto error;
 	}
 
-	dev_info(&interface->dev, "Pico conectada: /dev/" DEVICE_NAME "%d (out=0x%02x in=0x%02x)\n",
-		 interface->minor - MINOR_BASE, dev->out_ep, dev->in_ep);
+	dev_info(&interface->dev, "Pico conectada (minor=%d, out=0x%02x in=0x%02x)\n",
+		 interface->minor, dev->out_ep, dev->in_ep);
 	return 0;
 
 error:
