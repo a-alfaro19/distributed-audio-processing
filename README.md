@@ -118,3 +118,13 @@ el analisis:
 ```bash
 cmp cancion_prueba.wav recuperado.wav && ./prueba_wav recuperado.wav
 ```
+
+## Matriz 8x8 y libaudio.a
+
+`libaudio.a` es el único módulo que accede al driver `/dev/audiousb0`. Conexiones, alimentación, firmware de la Pico y puesta en marcha: [docs/hardware/matriz.md](docs/hardware/matriz.md).
+
+```bash
+make libaudio          # build/lib/libaudio.a
+make probar-libaudio   # prueba sin hardware
+make demo-matriz       # bin/demo_matriz, requiere la matriz conectada
+```

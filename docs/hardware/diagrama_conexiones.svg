@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 470" width="920" height="470" font-family="Helvetica, Arial, sans-serif" font-size="13">
+  <rect width="920" height="470" fill="#ffffff"/>
+  <text x="460" y="30" text-anchor="middle" font-size="17" font-weight="bold" fill="#111">Diagrama eléctrico: visualizador de audio 8x8</text>
+
+  <!-- Nodo maestro -->
+  <rect x="20" y="170" width="170" height="110" rx="8" fill="#f1f5f9" stroke="#334155" stroke-width="1.5"/>
+  <text x="105" y="200" text-anchor="middle" font-weight="bold" fill="#111">Nodo maestro</text>
+  <text x="105" y="220" text-anchor="middle" fill="#334155">Linux</text>
+  <text x="105" y="242" text-anchor="middle" font-size="12" fill="#334155">driver audiousb</text>
+  <text x="105" y="258" text-anchor="middle" font-size="12" fill="#334155">+ libaudio.a</text>
+
+  <!-- Cable USB -->
+  <line x1="190" y1="225" x2="270" y2="225" stroke="#64748b" stroke-width="5"/>
+  <text x="230" y="214" text-anchor="middle" font-size="12" fill="#334155">USB</text>
+  <text x="230" y="245" text-anchor="middle" font-size="11" fill="#64748b">datos + 5 V</text>
+
+  <!-- Pico W -->
+  <rect x="270" y="70" width="200" height="330" rx="8" fill="#ecfdf5" stroke="#047857" stroke-width="1.5"/>
+  <text x="370" y="96" text-anchor="middle" font-weight="bold" fill="#111">Raspberry Pi Pico W</text>
+    <rect x="262" y="210" width="12" height="30" fill="#64748b"/>
+  <text x="460" y="124" text-anchor="end" font-size="12" fill="#111">pin 40 · VBUS (5 V)</text>
+  <text x="460" y="164" text-anchor="end" font-size="12" fill="#111">pin 38 · GND</text>
+  <text x="460" y="244" text-anchor="end" font-size="12" fill="#111">pin 25 · GP19</text>
+  <text x="460" y="284" text-anchor="end" font-size="12" fill="#111">pin 24 · GP18</text>
+  <text x="460" y="324" text-anchor="end" font-size="12" fill="#111">pin 22 · GP17</text>
+  <text x="370" y="368" text-anchor="middle" font-size="11" fill="#047857">firmware pico_matriz.ino</text>
+  <text x="370" y="385" text-anchor="middle" font-size="11" fill="#475569">lógica de 3.3 V</text>
+
+  <!-- Cables -->
+  <!-- 5 V -->
+  <polyline points="470,120 640,120" fill="none" stroke="#d62828" stroke-width="2.5"/>
+  <text x="510" y="113" font-size="12" fill="#d62828">5 V</text>
+  <!-- GND -->
+  <polyline points="470,160 640,160" fill="none" stroke="#222222" stroke-width="2.5"/>
+  <text x="510" y="153" font-size="12" fill="#222222">GND</text>
+  <!-- DIN -->
+  <polyline points="470,240 640,240" fill="none" stroke="#1d4ed8" stroke-width="2.5"/>
+  <text x="490" y="233" font-size="12" fill="#1d4ed8">DIN</text>
+  <!-- CLK: GP18 hacia CLK del modulo -->
+  <polyline points="470,280 540,280 540,340 620,340 620,320 640,320" fill="none" stroke="#15803d" stroke-width="2.5"/>
+  <text x="490" y="273" font-size="12" fill="#15803d">CLK</text>
+  <!-- CS: GP17 hacia CS del modulo (salta sobre CLK en x=540) -->
+  <path d="M470,320 L532,320 A8,8 0 0 1 548,320 L580,320 L580,280 L640,280" fill="none" stroke="#b45309" stroke-width="2.5"/>
+  <text x="490" y="313" font-size="12" fill="#b45309">CS</text>
+
+  <!-- C1 entre 5 V y GND, cerca del modulo -->
+  <circle cx="610" cy="120" r="3.5" fill="#d62828"/>
+  <circle cx="610" cy="160" r="3.5" fill="#222222"/>
+  <line x1="610" y1="120" x2="610" y2="135" stroke="#222" stroke-width="1.5"/>
+  <line x1="600" y1="135" x2="620" y2="135" stroke="#222" stroke-width="2.5"/>
+  <path d="M600,145 Q610,139 620,145" fill="none" stroke="#222" stroke-width="2.5"/>
+  <line x1="610" y1="143" x2="610" y2="160" stroke="#222" stroke-width="1.5"/>
+  <text x="596" y="133" text-anchor="end" font-size="11" fill="#222">+</text>
+  <text x="630" y="190" text-anchor="end" font-size="11" fill="#475569">C1 470 µF / 10 V</text>
+
+  <!-- Modulo MAX7219 -->
+  <rect x="640" y="70" width="260" height="330" rx="8" fill="#fef2f2" stroke="#b91c1c" stroke-width="1.5"/>
+  <text x="770" y="96" text-anchor="middle" font-weight="bold" fill="#111">Módulo MAX7219 + matriz 8x8</text>
+  <text x="652" y="124" font-size="12" fill="#111">VCC</text>
+  <text x="652" y="164" font-size="12" fill="#111">GND</text>
+  <text x="652" y="244" font-size="12" fill="#111">DIN</text>
+  <text x="652" y="284" font-size="12" fill="#111">CS</text>
+  <text x="652" y="324" font-size="12" fill="#111">CLK</text>
+  <g fill="#ef4444" opacity="0.85">
+    <circle cx="730" cy="140" r="6"/><circle cx="750" cy="140" r="6"/><circle cx="770" cy="140" r="6"/><circle cx="790" cy="140" r="6"/><circle cx="810" cy="140" r="6"/><circle cx="830" cy="140" r="6"/><circle cx="850" cy="140" r="6"/><circle cx="870" cy="140" r="6"/>
+    <circle cx="730" cy="160" r="6"/><circle cx="750" cy="160" r="6"/><circle cx="770" cy="160" r="6"/><circle cx="790" cy="160" r="6"/><circle cx="810" cy="160" r="6"/><circle cx="830" cy="160" r="6"/><circle cx="850" cy="160" r="6"/><circle cx="870" cy="160" r="6"/>
+    <circle cx="730" cy="180" r="6"/><circle cx="750" cy="180" r="6"/><circle cx="770" cy="180" r="6"/><circle cx="790" cy="180" r="6"/><circle cx="810" cy="180" r="6"/><circle cx="830" cy="180" r="6"/><circle cx="850" cy="180" r="6"/><circle cx="870" cy="180" r="6"/>
+    <circle cx="730" cy="200" r="6"/><circle cx="750" cy="200" r="6"/><circle cx="770" cy="200" r="6"/><circle cx="790" cy="200" r="6"/><circle cx="810" cy="200" r="6"/><circle cx="830" cy="200" r="6"/><circle cx="850" cy="200" r="6"/><circle cx="870" cy="200" r="6"/>
+    <circle cx="730" cy="220" r="6"/><circle cx="750" cy="220" r="6"/><circle cx="770" cy="220" r="6"/><circle cx="790" cy="220" r="6"/><circle cx="810" cy="220" r="6"/><circle cx="830" cy="220" r="6"/><circle cx="850" cy="220" r="6"/><circle cx="870" cy="220" r="6"/>
+    <circle cx="730" cy="240" r="6"/><circle cx="750" cy="240" r="6"/><circle cx="770" cy="240" r="6"/><circle cx="790" cy="240" r="6"/><circle cx="810" cy="240" r="6"/><circle cx="830" cy="240" r="6"/><circle cx="850" cy="240" r="6"/><circle cx="870" cy="240" r="6"/>
+    <circle cx="730" cy="260" r="6"/><circle cx="750" cy="260" r="6"/><circle cx="770" cy="260" r="6"/><circle cx="790" cy="260" r="6"/><circle cx="810" cy="260" r="6"/><circle cx="830" cy="260" r="6"/><circle cx="850" cy="260" r="6"/><circle cx="870" cy="260" r="6"/>
+    <circle cx="730" cy="280" r="6"/><circle cx="750" cy="280" r="6"/><circle cx="770" cy="280" r="6"/><circle cx="790" cy="280" r="6"/><circle cx="810" cy="280" r="6"/><circle cx="830" cy="280" r="6"/><circle cx="850" cy="280" r="6"/><circle cx="870" cy="280" r="6"/>
+  </g>
+  <text x="800" y="318" text-anchor="middle" font-size="11" fill="#475569">columna 0 a la izquierda,</text>
+  <text x="800" y="333" text-anchor="middle" font-size="11" fill="#475569">fila 0 arriba</text>
+  <text x="770" y="385" text-anchor="middle" font-size="11" fill="#475569">alimentación 4–5.5 V, RSET típico 10 kΩ</text>
+
+  <!-- Notas -->
+  <text x="20" y="430" font-size="12" fill="#334155">Todo se alimenta desde el USB del maestro (500 mA disponibles). Brillo fijo 4/15 en firmware: ~90 mA de la matriz con los 64 LEDs encendidos.</text>
+  <text x="20" y="450" font-size="12" fill="#334155">Si la matriz muestra basura: cables de señal cortos (&lt; 20 cm) o un 74AHCT125 a 5 V entre GP17/18/19 y CS/CLK/DIN (el MAX7219 pide 3.5 V en alto).</text>
+</svg>
