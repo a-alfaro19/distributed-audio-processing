@@ -25,7 +25,10 @@
 #define DEVICE_NAME      "audiousb"
 #define MINOR_BASE       192
 #define USB_TIMEOUT_MS   1000
-#define MAX_PKT_SIZE     (1 + AUDIOUSB_FRAME_SIZE)   /* el comando mas grande */
+/* FRAME y PATTERN son los comandos mas grandes (1 + 8 bytes) */
+#define MAX_PKT_SIZE     (1 + AUDIOUSB_FRAME_SIZE)
+_Static_assert(AUDIOUSB_PATTERN_SIZE <= AUDIOUSB_FRAME_SIZE,
+	       "MAX_PKT_SIZE debe cubrir el comando PATTERN");
 
 struct audiousb {
 	struct usb_device    *udev;
@@ -216,6 +219,16 @@ static long audiousb_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 		pkt[2] = p.y;
 		pkt[3] = p.on;
 		len = 4;
+		break;
+	}
+	case AUDIOUSB_IOC_SET_PATTERN: {
+		struct audiousb_pattern p;
+
+		if (copy_from_user(&p, argp, sizeof(p)))
+			return -EFAULT;
+		pkt[0] = AUDIOUSB_CMD_PATTERN;
+		memcpy(&pkt[1], p.rows, AUDIOUSB_PATTERN_SIZE);
+		len = 1 + AUDIOUSB_PATTERN_SIZE;
 		break;
 	}
 	case AUDIOUSB_IOC_CLEAR:

@@ -18,6 +18,8 @@ int main(int argc, char **argv)
 	struct audiousb_point point = { .x = 3, .y = 4, .on = 1 };
 	struct audiousb_timing timing = { .refresh_ms = 50, .decay = 10 };
 	struct audiousb_frame bad = { .levels = { 9, 0, 0, 0, 0, 0, 0, 0 } };
+	struct audiousb_pattern pattern = {
+		.rows = { 0x3C, 0x42, 0xA5, 0x81, 0xA5, 0x99, 0x42, 0x3C } };
 	int fd = open(path, O_RDWR);
 
 	if (fd < 0) {
@@ -27,6 +29,10 @@ int main(int argc, char **argv)
 
 	if (ioctl(fd, AUDIOUSB_IOC_SET_FRAME, &frame) < 0)
 		perror("SET_FRAME");
+	sleep(1);
+
+	if (ioctl(fd, AUDIOUSB_IOC_SET_PATTERN, &pattern) < 0)
+		perror("SET_PATTERN");
 	sleep(1);
 
 	if (ioctl(fd, AUDIOUSB_IOC_SET_TIMING, &timing) < 0)
