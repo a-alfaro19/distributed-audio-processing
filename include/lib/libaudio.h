@@ -20,7 +20,8 @@
 
 #define AUDIO_MATRIX_COLS 8
 #define AUDIO_MATRIX_ROWS 8
-#define AUDIO_MATRIX_DEFAULT_PATH "/dev/audiousb0"
+/* Enlace fijo que crea la regla udev (el driver publica /dev/audiousbN) */
+#define AUDIO_MATRIX_DEFAULT_PATH "/dev/matriz8x8"
 
 /* Limites del periodo de refresco aceptado por el dispositivo */
 #define AUDIO_MATRIX_REFRESH_MIN_MS 1

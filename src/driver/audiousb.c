@@ -324,8 +324,13 @@ static int audiousb_probe(struct usb_interface *interface,
 		goto error;
 	}
 
-	dev_info(&interface->dev, "Pico conectada: /dev/" DEVICE_NAME "%d (out=0x%02x in=0x%02x)\n",
-		 interface->minor - MINOR_BASE, dev->out_ep, dev->in_ep);
+	/*
+	 * Con CONFIG_USB_DYNAMIC_MINORS (Ubuntu, Debian...) el kernel ignora
+	 * MINOR_BASE y el numero depende de otros dispositivos usbmisc
+	 * (hiddev...). Se imprime el nombre real que le asigno.
+	 */
+	dev_info(&interface->dev, "Pico conectada: /dev/%s (out=0x%02x in=0x%02x)\n",
+		 dev_name(interface->usb_dev), dev->out_ep, dev->in_ep);
 	return 0;
 
 error:

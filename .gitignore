@@ -15,3 +15,13 @@ build/
 cliente
 prueba_fft
 prueba_wav
+
+# Kernel module build (src/driver)
+*.ko
+*.o
+*.mod
+*.mod.c
+*.cmd
+Module.symvers
+modules.order
+src/driver/test_audiousb

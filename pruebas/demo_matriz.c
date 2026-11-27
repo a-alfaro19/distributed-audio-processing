@@ -1,6 +1,6 @@
 /*
  * Demo de la matriz real a traves de libaudio.a.
- * Uso: ./bin/demo_matriz [/dev/audiousb0]
+ * Uso: ./bin/demo_matriz [/dev/matriz8x8]
  *
  * Recorre: patrones completos, barrido de puntos y barras con atenuacion.
  */

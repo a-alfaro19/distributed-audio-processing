@@ -1,6 +1,6 @@
 /*
  * test_audiousb.c - Prueba del driver sin necesitar libaudio.a
- * Uso: ./test_audiousb [/dev/audiousb0]
+ * Uso: ./test_audiousb [/dev/matriz8x8]
  */
 #include <stdio.h>
 #include <fcntl.h>
@@ -13,7 +13,7 @@
 
 int main(int argc, char **argv)
 {
-	const char *path = argc > 1 ? argv[1] : "/dev/audiousb0";
+	const char *path = argc > 1 ? argv[1] : "/dev/matriz8x8";
 	struct audiousb_frame frame = { .levels = { 1, 2, 3, 4, 5, 6, 7, 8 } };
 	struct audiousb_point point = { .x = 3, .y = 4, .on = 1 };
 	struct audiousb_timing timing = { .refresh_ms = 50, .decay = 10 };
