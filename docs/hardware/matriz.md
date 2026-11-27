@@ -49,10 +49,10 @@ Cálculo: el MAX7219 enciende una columna a la vez (8 LEDs), a unos 40 mA por LE
 
 1. **Firmware.** En Arduino IDE elige la placa *Raspberry Pi Pico W* y en **Herramientas → USB Stack** elige **Adafruit TinyUSB**. Carga `src/firmware/pico_matriz/pico_matriz.ino`. Al encender se ve un corazón: eso confirma que la Pico controla bien el MAX7219.
 2. **USB en Linux.** `lsusb | grep 2e8a:4001` debe mostrar el dispositivo.
-3. **Driver.** `cd src/driver && make && sudo insmod audiousb.ko`. Después, `dmesg | tail` debe mostrar `Pico conectada: /dev/audiousb0`.
-4. **Permisos** (una sola vez), para que el maestro abra la matriz sin `sudo`:
+3. **Driver.** `cd src/driver && make && sudo insmod audiousb.ko`. Después, `dmesg | tail` debe mostrar `Pico conectada: /dev/audiousbN`. El número `N` depende de la máquina (no siempre es 0).
+4. **Permisos y nombre fijo** (una sola vez). La regla deja abrir la matriz sin `sudo` y crea el enlace `/dev/matriz8x8`, que es la ruta por defecto de `libaudio.a`:
    ```bash
-   echo 'SUBSYSTEM=="usbmisc", KERNEL=="audiousb[0-9]*", MODE="0666"' | sudo tee /etc/udev/rules.d/99-audiousb.rules
+   echo 'SUBSYSTEM=="usbmisc", KERNEL=="audiousb[0-9]*", MODE="0666", SYMLINK+="matriz8x8"' | sudo tee /etc/udev/rules.d/99-audiousb.rules
    sudo udevadm control --reload && sudo udevadm trigger
    ```
 5. **Prueba.** Desde la raíz del repo: `make demo-matriz && ./bin/demo_matriz`. Muestra todos los LEDs encendidos, un corazón, una carita, un tablero de ajedrez, un barrido punto por punto y barras con atenuación.
@@ -64,7 +64,7 @@ La prueba sin hardware de la biblioteca es `make probar-libaudio`.
 ```c
 #include "lib/libaudio.h"
 
-audio_matrix *m = audio_matrix_open(NULL);          /* /dev/audiousb0 */
+audio_matrix *m = audio_matrix_open(NULL);          /* /dev/matriz8x8 */
 const uint8_t carita[8] = {0x3C, 0x42, 0xA5, 0x81, 0xA5, 0x99, 0x42, 0x3C};
 audio_matrix_show_pattern(m, carita);               /* imagen completa */
 
@@ -84,8 +84,8 @@ Se enlaza con `build/lib/libaudio.a` (`make libaudio`). Formato del patrón: `ro
 
 ## Trampas
 
-- ⚠️ **El driver nunca detecta la Pico (no aparece `/dev/audiousb0`).** Pasa si el firmware se compiló con *USB Stack = Pico SDK*: así la Pico no expone la interfaz vendor (clase 0xFF) que busca el driver. Recompila con **Adafruit TinyUSB**.
+- ⚠️ **El driver nunca detecta la Pico (no aparece `/dev/audiousbN`).** Pasa si el firmware se compiló con *USB Stack = Pico SDK*: así la Pico no expone la interfaz vendor (clase 0xFF) que busca el driver. Recompila con **Adafruit TinyUSB**.
 - ⚠️ **También aparece `/dev/ttyACM0`.** Es normal: el dispositivo es compuesto (serial CDC + vendor). El puerto serial se conserva para poder volver a cargar el firmware desde el IDE. Si la carga falla, mantén presionado BOOTSEL al conectar la Pico.
 - 🚫 **No alimentes el módulo desde el pin 3V3.** El MAX7219 necesita entre 4 y 5.5 V, y el regulador de 3.3 V de la Pico solo da unos 300 mA. Usa VBUS.
 - ⚠️ **La matriz muestra puntos al azar o no responde.** El MAX7219 pide al menos 3.5 V en alto y la Pico saca 3.3 V. Casi siempre funciona igual, pero con cables largos o ruidosos falla. Acorta los cables de señal o pon un 74AHCT125 alimentado a 5 V en DIN, CLK y CS.
-- ⚠️ **`Permission denied` al abrir `/dev/audiousb0`.** Falta la regla udev del paso 4. `mpirun` no corre como root.
+- ⚠️ **`Permission denied` al abrir la matriz, o no existe `/dev/matriz8x8`.** Falta la regla udev del paso 4. `mpirun` no corre como root.

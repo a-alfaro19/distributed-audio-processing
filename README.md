@@ -121,7 +121,7 @@ cmp cancion_prueba.wav recuperado.wav && ./prueba_wav recuperado.wav
 
 ## Matriz 8x8 y libaudio.a
 
-`libaudio.a` es el único módulo que accede al driver `/dev/audiousb0`. Conexiones, alimentación, firmware de la Pico y puesta en marcha: [docs/hardware/matriz.md](docs/hardware/matriz.md).
+`libaudio.a` es el único módulo que accede al driver (`/dev/matriz8x8`, enlace al `/dev/audiousbN` que crea el driver). Conexiones, alimentación, firmware de la Pico y puesta en marcha: [docs/hardware/matriz.md](docs/hardware/matriz.md). Pasos para probar el driver en Linux: [docs/hardware/prueba_driver_linux.md](docs/hardware/prueba_driver_linux.md).
 
 ```bash
 make libaudio          # build/lib/libaudio.a
